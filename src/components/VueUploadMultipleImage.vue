@@ -281,6 +281,8 @@ import { forEach, findIndex, orderBy, cloneDeep } from 'lodash'
 import Popper from 'vue-popperjs'
 import 'vue-popperjs/dist/css/vue-popper.css'
 import VueImageLightboxCarousel from 'vue-image-lightbox-carousel'
+import JQuery from 'jquery'
+window.$ = JQuery
 export default {
 
   name: 'VueUploadMultipleImage',
@@ -415,22 +417,85 @@ export default {
       this.isDragover = true
     },
     createImage (file) {
+      var dataURLToBlob = function(dataURL) {
+          var BASE64_MARKER = ';base64,';
+          if (dataURL.indexOf(BASE64_MARKER) == -1) {
+              var parts = dataURL.split(',');
+              var contentType = parts[0].split(':')[1];
+              var raw = parts[1];
+
+              return new Blob([raw], {type: contentType});
+          }
+
+          var parts = dataURL.split(BASE64_MARKER);
+          var contentType = parts[0].split(':')[1];
+          var raw = window.atob(parts[1]);
+          var rawLength = raw.length;
+
+          var uInt8Array = new Uint8Array(rawLength);
+
+          for (var i = 0; i < rawLength; ++i) {
+              uInt8Array[i] = raw.charCodeAt(i);
+          }
+
+          return new Blob([uInt8Array], {type: contentType});
+      }
       if (this.disabled) return
       let reader = new FileReader()
       let formData = new FormData()
       formData.append('file', file)
       reader.onload = (e) => {
-        let dataURI = e.target.result
-        if (dataURI) {
-          if (!this.images.length) {
-            this.images.push({ name: file.name, path: dataURI, highlight: 1, default: 1 })
-            this.currentIndexImage = 0
+        var image = new Image();
+        image.onload = function (imageEvent) {
+          // Resize the image
+          var canvas = document.createElement('canvas'),
+              max_size = 1200,// TODO : pull max size from a site config
+              width = image.width,
+              height = image.height;
+          if (width > height) {
+              if (width > max_size) {
+                  height *= max_size / width;
+                  width = max_size;
+              }
           } else {
-            this.images.push({ name: file.name, path: dataURI, highlight: 0, default: 0 })
+              if (height > max_size) {
+                  width *= max_size / height;
+                  height = max_size;
+              }
           }
-          this.$emit('upload-success', formData, this.images.length - 1, this.images)
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+          dataUrl = canvas.toDataURL('image/' + file.name.split('.').pop());
+
+          var resizedImage = dataURLToBlob(dataUrl);
+          $.event.trigger({
+              type: "imageResized",
+              blob: resizedImage,
+              url: dataUrl
+          });
+
+          if (dataUrl) {
+
+            if (!images2.length) {
+              images2.push({ name: file.name, path: dataUrl, highlight: 1, default: 1 })
+              currentIndexImage2 = 0
+            } else {
+              images2.push({ name: file.name, path: dataUrl, highlight: 0, default: 0 })
+            }
+            this2.$emit('upload-success', formData, images2.length - 1, images2)
+          }
+
+          return dataUrl;
         }
+        let dataUrl = null;
+
+        image.src = e.target.result;
+        let this2 = this;
+        let images2 = this.images;
+        let currentIndexImage2 = this.currentIndexImage;
       }
+      let dataUrl = null;
       reader.readAsDataURL(file)
     },
     editImage (file) {
